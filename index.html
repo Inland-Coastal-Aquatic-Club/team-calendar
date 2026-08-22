@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ICAC Practice Group Calendars</title>
     <style>
-        /* Forces scroll bars to disappear completely within the TeamUnify iframe */
         html, body {
             margin: 0;
             padding: 0;
@@ -15,8 +14,6 @@
             color: #333;
             text-align: center;
         }
-        
-        /* Adjusted padding slightly to guarantee it sits safely inside a 450px-480px height container */
         .container {
             max-width: 450px;
             margin: 0 auto;
@@ -26,10 +23,8 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.05);
             box-sizing: border-box;
         }
-        
         h1 { font-size: 22px; margin-top: 0; margin-bottom: 5px; color: #111; }
         p { color: #666; font-size: 14px; margin-bottom: 20px; line-height: 1.4; }
-        
         .group-btn {
             display: block;
             width: 100%;
@@ -46,13 +41,10 @@
             transition: opacity 0.2s;
         }
         .group-btn:hover { opacity: 0.9; }
-        
-        /* Custom Team Colors */
         .btn-teal { background-color: #008080; }
         .btn-black { background-color: #222222; }
         .btn-age { background-color: #007aff; }
         .btn-senior { background-color: #5856d6; }
-
         .footer-note { font-size: 11px; color: #999; margin-top: 20px; line-height: 1.4; }
     </style>
 </head>
@@ -62,7 +54,6 @@
     <h1>Practice Calendars</h1>
     <p>Tap your swimmer's practice group below to sync the live schedule directly to your phone's calendar.</p>
 
-    <!-- Interactive Buttons -->
     <button class="group-btn btn-teal" onclick="routeCalendar('teal')">Teal Group</button>
     <button class="group-btn btn-black" onclick="routeCalendar('black')">Black Group</button>
     <button class="group-btn btn-age" onclick="routeCalendar('age')">Age Group</button>
@@ -74,26 +65,21 @@
 </div>
 
 <script>
-    // Live SportsEngine/GoMotion Feeds
     const feeds = {
-        teal: "https://gomotionapp.com",
-        black: "https://gomotionapp.com",
-        age: "https://gomotionapp.com",
-        senior: "https://gomotionapp.com"
+        teal: "https://www.gomotionapp.com/rest/ics/system/3/General.ics?key=JFvxO2WW3pFOWLJ4WoV9uw%3D%3D&enabled=true&startDate=1755011200000&endDate=1924905600000&roster_group_id=112986",
+        black: "https://www.gomotionapp.com/rest/ics/system/3/General.ics?key=JFvxO2WW3pFOWLJ4WoV9uw%3D%3D&enabled=true&startDate=1755011200000&endDate=1924905600000&roster_group_id=112987",
+        age: "https://www.gomotionapp.com/rest/ics/system/3/General.ics?key=JFvxO2WW3pFOWLJ4WoV9uw%3D%3D&enabled=true&startDate=1755011200000&endDate=1924905600000&roster_group_id=143144-112989-112990",
+        senior: "https://www.gomotionapp.com/rest/ics/system/3/General.ics?key=JFvxO2WW3pFOWLJ4WoV9uw%3D%3D&enabled=true&startDate=1755011200000&endDate=1924905600000&roster_group_id=112991-112992-112993"
     };
 
     function routeCalendar(groupKey) {
         const rawUrl = feeds[groupKey];
-        
-        // Detect iPhone / iPad / iPod devices
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
         if (isIOS) {
-            // Swap protocol to webcal:// to enforce native iOS Subscription prompts
             const webcalUrl = rawUrl.replace(/^https:\/\//i, 'webcal://');
             window.location.href = webcalUrl;
         } else {
-            // Direct injection handler for Android web browsers targeting Google Calendar
             const googleUrl = "https://google.com" + encodeURIComponent(rawUrl);
             window.open(googleUrl, '_blank');
         }
