@@ -1,0 +1,81 @@
+name: Update Schedule From Email
+
+on:
+  workflow_dispatch:
+    inputs:
+      email_body:
+        description: 'Coach Weekly Schedule Email Body'
+        required: true
+        type: string
+      dry_run:
+        description: 'Dry Run (validate and inspect without saving changes)'
+        required: false
+        type: boolean
+        default: false
+  issues:
+    types: [opened, edited]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  run-browser-automation:
+    # Execute if manually triggered OR if issue has 'schedule-update' label
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'schedule-update'))
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Unit Tests
+        run: npm test
+
+      - name: Install Playwright Chromium & System Dependencies
+        run: npx playwright install chromium --with-deps
+
+      - name: Execute Schedule Updates on TeamUnify
+        id: schedule_update
+        env:
+          TEAMUNIFY_USER: ${{ secrets.TEAMUNIFY_USER }}
+          TEAMUNIFY_PASS: ${{ secrets.TEAMUNIFY_PASS }}
+          COACH_EMAIL_BODY: ${{ inputs.email_body || github.event.issue.body }}
+          DRY_RUN: ${{ inputs.dry_run || false }}
+        run: node scripts/update_schedule.js
+
+      - name: Upload Screenshots Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-screenshots
+          path: screenshots/
+          retention-days: 7
+
+      - name: Post Comment on Issue
+        if: github.event_name == 'issues' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = '${{ job.status }}';
+            const isDryRun = '${{ inputs.dry_run }}' === 'true';
+            const body = status === 'success'
+              ? `✅ **Schedule Update Succeeded!** ${isDryRun ? '*(Dry Run - No live changes applied)*' : '\nThe practices on icacswim.com have been updated.'}\n\nYou can download the execution screenshots from the workflow run artifacts.`
+              : `❌ **Schedule Update Failed!**\nPlease check the Actions run logs and downloaded screenshot artifacts to see where it failed.`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
