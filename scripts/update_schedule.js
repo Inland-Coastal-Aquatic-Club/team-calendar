@@ -264,10 +264,32 @@ export async function runScheduleUpdate() {
     await page.waitForTimeout(2000);
 
     console.log('[Step 4] Opening Practices section...');
-    const practicesNav = page.locator('label, a, span').filter({ hasText: /^Practices$/i }).first();
-    await practicesNav.waitFor({ timeout: 15000 });
-    await practicesNav.click();
-    await page.waitForTimeout(2000);
+    // Locate visible 'Practices' link or label in the sidebar/navigation
+    const practicesCandidates = page.locator('label, a, span, div[role="button"]')
+      .filter({ hasText: /^Practices$/i });
+
+    let clickedPractices = false;
+    const count = await practicesCandidates.count();
+    console.log(`[Step 4] Found ${count} candidate(s) for 'Practices' in Back Office`);
+
+    for (let i = 0; i < count; i++) {
+      const candidate = practicesCandidates.nth(i);
+      if (await candidate.isVisible().catch(() => false)) {
+        console.log(`[Step 4] Clicking visible 'Practices' element #${i}...`);
+        await candidate.click();
+        clickedPractices = true;
+        break;
+      }
+    }
+
+    if (!clickedPractices) {
+      console.log("[Step 4] No candidate was strictly visible; attempting force click on first candidate...");
+      const fallback = practicesCandidates.first();
+      await fallback.scrollIntoViewIfNeeded().catch(() => {});
+      await fallback.click({ force: true });
+    }
+
+    await page.waitForTimeout(3000);
     await takeScreenshot(page, '03-back-office-practices');
 
     // Step 5: Locate the Practices Frame and ensure Month view
