@@ -332,3 +332,35 @@ export function generateSchedulePlan(emailText, referenceYear = new Date().getFu
     additions
   };
 }
+
+/**
+ * Format the parsed schedule into a clean, emoji-formatted WhatsApp message
+ * optimized for mobile readability and parent group chats.
+ */
+export function formatWhatsAppMessage(plan) {
+  let msg = `🏊‍♂️ *ICAC Swim Practice Schedule*\n`;
+  msg += `📅 *${plan.week.rawMatch.replace(/^week\s+of\s+/i, 'Week of ')}*\n\n`;
+
+  for (const [dayName, day] of Object.entries(plan.days)) {
+    const isCancel = day.isAllCanceled;
+    const dayHeader = isCancel ? `🚫 *${dayName}, ${day.dateString}*` : `🔹 *${dayName}, ${day.dateString}*`;
+    msg += `${dayHeader}\n`;
+
+    if (day.isAllCanceled) {
+      msg += `• ❌ NO SWIM PRACTICE FOR ALL GROUPS\n`;
+    }
+
+    for (const p of day.practices) {
+      msg += `• ${p.group}: ${p.startTime} - ${p.endTime}\n`;
+    }
+
+    for (const d of day.drylands) {
+      msg += `• 🏋️ Drylands (${d.group}): ${d.startTime} - ${d.endTime}\n`;
+    }
+
+    msg += `\n`;
+  }
+
+  msg += `📲 *Live Sync / Add to Calendar:* https://www.icacswim.com\n`;
+  return msg.trim();
+}

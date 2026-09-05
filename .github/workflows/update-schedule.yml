@@ -55,6 +55,23 @@ jobs:
           DRY_RUN: ${{ inputs.dry_run || false }}
         run: node scripts/update_schedule.js
 
+      - name: Format & Dispatch WhatsApp Message
+        id: whatsapp_dispatch
+        if: always()
+        env:
+          COACH_EMAIL_BODY: ${{ inputs.email_body || github.event.issue.body }}
+          WHATSAPP_API_URL: ${{ secrets.WHATSAPP_API_URL }}
+          WHATSAPP_TOKEN: ${{ secrets.WHATSAPP_TOKEN }}
+          WHATSAPP_CHAT_ID: ${{ secrets.WHATSAPP_CHAT_ID }}
+        run: |
+          node scripts/send_whatsapp.js
+          if [ -f whatsapp_message.txt ]; then
+            echo "### 📱 WhatsApp Schedule Message" >> $GITHUB_STEP_SUMMARY
+            echo '```text' >> $GITHUB_STEP_SUMMARY
+            cat whatsapp_message.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
       - name: Upload Screenshots Artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -68,11 +85,21 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const fs = require('fs');
             const status = '${{ job.status }}';
             const isDryRun = '${{ inputs.dry_run }}' === 'true';
+
+            let waContent = '';
+            if (fs.existsSync('whatsapp_message.txt')) {
+              const waText = fs.readFileSync('whatsapp_message.txt', 'utf8');
+              const waUrl = 'https://api.whatsapp.com/send?text=' + encodeURIComponent(waText);
+              waContent = `\n\n### 📱 WhatsApp Message (Ready to Share)\n[📲 Click to Open in WhatsApp](${waUrl})\n\n\`\`\`text\n${waText}\n\`\`\``;
+            }
+
             const body = status === 'success'
-              ? `✅ **Schedule Update Succeeded!** ${isDryRun ? '*(Dry Run - No live changes applied)*' : '\nThe practices on icacswim.com have been updated.'}\n\nYou can download the execution screenshots from the workflow run artifacts.`
-              : `❌ **Schedule Update Failed!**\nPlease check the Actions run logs and downloaded screenshot artifacts to see where it failed.`;
+              ? `✅ **Schedule Update Succeeded!** ${isDryRun ? '*(Dry Run - No live changes applied)*' : '\nThe practices on icacswim.com have been updated.'}\n\nYou can download the execution screenshots from the workflow run artifacts.${waContent}`
+              : `❌ **Schedule Update Failed!**\nPlease check the Actions run logs and downloaded screenshot artifacts to see where it failed.${waContent}`;
+
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,

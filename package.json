@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.js",
-    "update-schedule": "node scripts/update_schedule.js"
+    "update-schedule": "node scripts/update_schedule.js",
+    "whatsapp": "node scripts/send_whatsapp.js"
   },
   "keywords": [],
   "author": "",

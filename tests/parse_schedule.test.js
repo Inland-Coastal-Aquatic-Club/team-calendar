@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseWeekRange, parseDailySchedule, generateSchedulePlan } from '../scripts/parse_schedule.js';
+import { parseWeekRange, parseDailySchedule, generateSchedulePlan, formatWhatsAppMessage } from '../scripts/parse_schedule.js';
 
 const standardEmail = `
 Hi Parents,
@@ -106,4 +106,18 @@ test('parses cancellation email with multi-month rollover, cancellations, and dr
   const satAge = plan.additions.find(a => a.day === 'Saturday' && a.group === 'Age Group');
   assert.ok(satAge);
   assert.equal(satAge.startTime, '8:00am');
+});
+
+test('generates formatted WhatsApp message with emojis and bullet points', () => {
+  const plan = generateSchedulePlan(cancellationEmail, 2026);
+  const wa = formatWhatsAppMessage(plan);
+
+  assert.ok(wa.includes('🏊‍♂️ *ICAC Swim Practice Schedule*'));
+  assert.ok(wa.includes('Week of August 31st - September 5th'));
+  assert.ok(wa.includes('🚫 *Tuesday, 09/01*'));
+  assert.ok(wa.includes('• ❌ NO SWIM PRACTICE FOR ALL GROUPS'));
+  assert.ok(wa.includes('🏋️ Drylands (Senior & Age Group 1)'));
+  assert.ok(wa.includes('• Senior: 7:00am - 9:30am'));
+  assert.ok(wa.includes('• Age Group: 8:00am - 9:30am'));
+  assert.ok(wa.includes('https://www.icacswim.com'));
 });
