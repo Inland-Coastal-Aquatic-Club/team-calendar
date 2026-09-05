@@ -264,13 +264,29 @@ export async function runScheduleUpdate() {
     await page.waitForTimeout(2000);
 
     console.log('[Step 4] Opening Practices section...');
-    // Locate visible 'Practices' link or label in the sidebar/navigation
-    const practicesCandidates = page.locator('label, a, span, div[role="button"]')
+
+    // 1. Hover/click 'Events & Competition' to open submenu (flyout menu)
+    const eventsMenu = page.locator('label, a, span, div, li')
+      .filter({ hasText: /Events\s*&\s*Competition/i })
+      .first();
+
+    if (await eventsMenu.isVisible({ timeout: 8000 }).catch(() => false)) {
+      console.log('[Step 4] Hovering over "Events & Competition" to open submenu...');
+      await eventsMenu.hover();
+      await page.waitForTimeout(600);
+      await eventsMenu.click().catch(() => {});
+      await page.waitForTimeout(600);
+    } else {
+      console.log('[Step 4] "Events & Competition" not directly visible, checking sidebar...');
+    }
+
+    // 2. Click 'Practices' from the opened submenu
+    const practicesCandidates = page.locator('label, a, span, div[role="button"], li')
       .filter({ hasText: /^Practices$/i });
 
     let clickedPractices = false;
     const count = await practicesCandidates.count();
-    console.log(`[Step 4] Found ${count} candidate(s) for 'Practices' in Back Office`);
+    console.log(`[Step 4] Found ${count} candidate(s) for 'Practices'`);
 
     for (let i = 0; i < count; i++) {
       const candidate = practicesCandidates.nth(i);
@@ -283,7 +299,7 @@ export async function runScheduleUpdate() {
     }
 
     if (!clickedPractices) {
-      console.log("[Step 4] No candidate was strictly visible; attempting force click on first candidate...");
+      console.log("[Step 4] Forcing click on first Practices candidate...");
       const fallback = practicesCandidates.first();
       await fallback.scrollIntoViewIfNeeded().catch(() => {});
       await fallback.click({ force: true });
