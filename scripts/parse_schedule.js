@@ -39,6 +39,54 @@ export const GROUP_DEFINITIONS = {
 };
 
 /**
+ * Resolve a descriptive group string to its constituent TeamUnify codes.
+ * E.g. "Age Group" -> ["AG1", "AG2", "AG3"]
+ *      "Age Group 1" -> ["AG1"]
+ *      "Senior & Age Group 1" -> ["AG1", "SR1", "SR2"]
+ */
+export function resolveGroupCodes(groupString) {
+  if (!groupString) return [];
+  const text = groupString.toLowerCase();
+  const codes = new Set();
+
+  if (/\bblack\b|\bb\b/i.test(text)) {
+    codes.add('B');
+  }
+
+  if (/\bteal\b|\bt\b/i.test(text)) {
+    codes.add('T');
+  }
+
+  if (/\bage\s*group\s*1\b|\bag1\b/i.test(text)) {
+    codes.add('AG1');
+  }
+  if (/\bage\s*group\s*2\b|\bag2\b/i.test(text)) {
+    codes.add('AG2');
+  }
+  if (/\bage\s*group\s*3\b|\bag3\b/i.test(text)) {
+    codes.add('AG3');
+  }
+  if (/\bage\s*group\b/i.test(text) && !/\bage\s*group\s*[123]\b/i.test(text) && !/\bag[123]\b/i.test(text)) {
+    codes.add('AG1');
+    codes.add('AG2');
+    codes.add('AG3');
+  }
+
+  if (/\bsenior\s*1\b|\bsr1\b/i.test(text)) {
+    codes.add('SR1');
+  }
+  if (/\bsenior\s*2\b|\bsr2\b/i.test(text)) {
+    codes.add('SR2');
+  }
+  if (/\bsenior\b/i.test(text) && !/\bsenior\s*[12]\b/i.test(text) && !/\bsr[12]\b/i.test(text)) {
+    codes.add('SR1');
+    codes.add('SR2');
+  }
+
+  return Array.from(codes);
+}
+
+/**
  * Clean ordinal suffixes like "24th", "1st", "2nd", "3rd"
  */
 function cleanDayNumber(str) {
@@ -161,8 +209,10 @@ export function parseDailySchedule(text, weekInfo) {
     const drylandRegex = /Drylands(?:\s+for\s+(.+?))?\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s*[-–—]\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i;
     const drylandMatch = content.match(drylandRegex);
     if (drylandMatch) {
+      const dGroup = drylandMatch[1] ? drylandMatch[1].trim() : 'All';
       dayData.drylands.push({
-        group: drylandMatch[1] ? drylandMatch[1].trim() : 'All',
+        group: dGroup,
+        codes: resolveGroupCodes(dGroup),
         startTime: drylandMatch[2].trim(),
         endTime: drylandMatch[3].trim(),
         raw: drylandMatch[0]
@@ -184,6 +234,7 @@ export function parseDailySchedule(text, weekInfo) {
         const groupName = pMatch[1].replace(/\s+/g, ' ').trim();
         dayData.practices.push({
           group: groupName,
+          codes: resolveGroupCodes(groupName),
           startTime: pMatch[2].trim(),
           endTime: pMatch[3].trim(),
           raw: pMatch[0]
@@ -224,6 +275,7 @@ export function generateSchedulePlan(emailText, referenceYear = new Date().getFu
         date: dayData.dateString,
         allGroups: true,
         groups: dayData.canceledGroups,
+        codes: ['B', 'T', 'AG1', 'AG2', 'AG3', 'SR1', 'SR2'],
         reason: dayData.rawText
       });
     } else if (dayData.canceledGroups.length > 0) {
@@ -232,6 +284,7 @@ export function generateSchedulePlan(emailText, referenceYear = new Date().getFu
         date: dayData.dateString,
         allGroups: false,
         groups: dayData.canceledGroups,
+        codes: resolveGroupCodes(dayData.canceledGroups.join(' ')),
         reason: dayData.rawText
       });
     }
@@ -247,6 +300,7 @@ export function generateSchedulePlan(emailText, referenceYear = new Date().getFu
         day: dayName,
         date: dayData.dateString,
         group: d.group,
+        codes: d.codes,
         startTime: d.startTime,
         endTime: d.endTime
       });
@@ -262,6 +316,7 @@ export function generateSchedulePlan(emailText, referenceYear = new Date().getFu
           day: dayName,
           date: dayData.dateString,
           group: p.group,
+          codes: p.codes,
           startTime: p.startTime,
           endTime: p.endTime
         });

@@ -287,16 +287,23 @@ export async function runScheduleUpdate() {
     const targetEndDay = plan.week.targetEndDayNumber;
     const formattedEndDate = plan.week.formattedEndDate;
 
-    // Groups to update from Monday (MWF series)
-    const mwfGroups = ['B', 'T', 'AG1', 'AG2', 'AG3', 'SR1', 'SR2'];
-    for (const grp of mwfGroups) {
-      const loc = practicesFrame.locator('.event-item, .title-wrapper').filter({ hasText: grp }).first();
-      if (await loc.isVisible().catch(() => false)) {
-        console.log(`[Series] Found series item for ${grp}, extending repeat end date...`);
-        try {
-          await extendSeriesEndDate(practicesFrame, loc, targetEndDay, formattedEndDate, isDryRun);
-        } catch (e) {
-          console.warn(`[Warning] Could not extend series for ${grp}:`, e.message);
+    // Track updated series to prevent redundant edits
+    const updatedCodes = new Set();
+
+    for (const entry of plan.seriesToExtend) {
+      console.log(`[Series] Processing ${entry.day} series: ${entry.series.join(', ')}...`);
+      for (const grp of entry.series) {
+        if (updatedCodes.has(grp)) continue;
+
+        const loc = practicesFrame.locator('.event-item, .title-wrapper').filter({ hasText: grp }).first();
+        if (await loc.isVisible().catch(() => false)) {
+          console.log(`[Series] Found series item for ${grp}, extending repeat end date to ${formattedEndDate}...`);
+          try {
+            await extendSeriesEndDate(practicesFrame, loc, targetEndDay, formattedEndDate, isDryRun);
+            updatedCodes.add(grp);
+          } catch (e) {
+            console.warn(`[Warning] Could not extend series for ${grp}:`, e.message);
+          }
         }
       }
     }
@@ -306,17 +313,20 @@ export async function runScheduleUpdate() {
       console.log('[Step 7] Processing cancellations for the week...');
       for (const cancelItem of plan.cancellationsToDelete) {
         console.log(`[Cancellation] ${cancelItem.day} (${cancelItem.date}): ${cancelItem.reason}`);
-        // If practices on that day should be canceled/removed
+        console.log(`[Cancellation] Targeted group codes: ${cancelItem.codes.join(', ')}`);
+
         // Locate day column/cell and find practices to delete single occurrence
         const dayCell = practicesFrame.locator('.grid-table td').filter({ hasText: cancelItem.day }).first();
         if (await dayCell.isVisible().catch(() => false)) {
-          const eventsOnDay = dayCell.locator('.event-item');
-          const count = await eventsOnDay.count();
-          for (let i = 0; i < count; i++) {
-            try {
-              await deleteSingleOccurrence(practicesFrame, eventsOnDay.nth(i), isDryRun);
-            } catch (err) {
-              console.warn(`[Warning] Could not delete occurrence on ${cancelItem.day}:`, err.message);
+          for (const code of cancelItem.codes) {
+            const matchingEvent = dayCell.locator('.event-item, .title-wrapper').filter({ hasText: code }).first();
+            if (await matchingEvent.isVisible().catch(() => false)) {
+              try {
+                console.log(`[Cancellation] Deleting occurrence for ${code} on ${cancelItem.day}...`);
+                await deleteSingleOccurrence(practicesFrame, matchingEvent, isDryRun);
+              } catch (err) {
+                console.warn(`[Warning] Could not delete occurrence of ${code} on ${cancelItem.day}:`, err.message);
+              }
             }
           }
         }
