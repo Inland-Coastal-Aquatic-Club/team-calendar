@@ -69,82 +69,150 @@ async function findModalFrame(practicesFrame) {
 }
 
 /**
+ * Safely close any open modal dialog in the practices frame
+ */
+async function closeModalIfOpen(practicesFrame) {
+  try {
+    const openModal = practicesFrame.locator('.modal.in, .CreatePracticeModal.in, .modal-backdrop');
+    if (await openModal.first().isVisible({ timeout: 1000 }).catch(() => false)) {
+      console.log('[Cleanup] Closing lingering modal dialog...');
+      const closeBtn = practicesFrame.locator('.modal.in .close, .modal.in button[title="Close"], .modal.in .fa-times, .close').first();
+      if (await closeBtn.isVisible().catch(() => false)) {
+        await closeBtn.click().catch(() => {});
+      } else {
+        await practicesFrame.page().keyboard.press('Escape');
+      }
+      await practicesFrame.waitForTimeout(1000);
+    }
+  } catch {
+    // Ignore cleanup errors
+  }
+}
+
+/**
  * Extend a practice series repeating end date
  */
 async function extendSeriesEndDate(practicesFrame, eventLocator, targetEndDay, formattedEndDate, isDryRun) {
-  console.log(`[Update] Clicking event to edit recurring series...`);
-  await eventLocator.click();
-  await practicesFrame.waitForTimeout(500);
+  try {
+    console.log(`[Update] Clicking event to edit recurring series...`);
+    await eventLocator.click();
+    await practicesFrame.waitForTimeout(500);
 
-  // Click Edit button on the event popup/toolbar
-  const editBtn = practicesFrame.getByRole('button', { name: 'Edit' });
-  await editBtn.waitFor({ timeout: 5000 });
-  await editBtn.click();
-  await practicesFrame.waitForTimeout(1000);
+    // Click Edit button on the event popup/toolbar
+    const editBtn = practicesFrame.getByRole('button', { name: 'Edit' });
+    await editBtn.waitFor({ timeout: 5000 });
+    await editBtn.click();
+    await practicesFrame.waitForTimeout(1000);
 
-  // Inside the modal dialog frame
-  const modalFrame = await findModalFrame(practicesFrame);
+    // Inside the modal dialog frame
+    const modalFrame = await findModalFrame(practicesFrame);
 
-  // 1. Choose "All in the series"
-  console.log('[Update] Selecting "All in the series"...');
-  const allSeriesText = modalFrame.getByText(/All in the series/i);
-  const allSeriesRadio = modalFrame.getByRole('radio', { name: /All in the series/i });
-  if (await allSeriesRadio.isVisible().catch(() => false)) {
-    await allSeriesRadio.check();
-  } else if (await allSeriesText.isVisible().catch(() => false)) {
-    await allSeriesText.click();
-  }
+    // 1. Choose "All in the series" (typically radio option 2 in TeamUnify)
+    console.log('[Update] Selecting "All in the series"...');
+    const radios = modalFrame.locator('input[type="radio"]');
+    const radioCount = await radios.count();
+    if (radioCount >= 2) {
+      await radios.nth(1).check({ force: true }).catch(() => {});
+      await radios.nth(1).click({ force: true }).catch(() => {});
+    }
 
-  // 2. Click "Edit Practice Repeat"
-  console.log('[Update] Opening Edit Practice Repeat...');
-  const editRepeatBtn = modalFrame.getByTitle(/Edit Practice Repeat/i);
-  await editRepeatBtn.waitFor({ timeout: 5000 });
-  await editRepeatBtn.click();
-  await modalFrame.waitForTimeout(500);
-
-  // 3. Update Repeat End Date
-  console.log(`[Update] Setting repeat end date to day ${targetEndDay} (${formattedEndDate})...`);
-  const calendarIcon = modalFrame.locator('#practiceRepeatEnd > div > .calendar, #practiceRepeatEnd .calendar-icon, #practiceRepeatEnd i').first();
-
-  if (await calendarIcon.isVisible().catch(() => false)) {
-    await calendarIcon.click();
+    const allSeriesLabel = modalFrame.locator('label, span').filter({ hasText: /All in the series/i }).first();
+    if (await allSeriesLabel.isVisible().catch(() => false)) {
+      await allSeriesLabel.click({ force: true });
+    }
     await modalFrame.waitForTimeout(500);
 
-    // Click on target day in the open datepicker
-    const dayCell = modalFrame.getByRole('cell', { name: String(targetEndDay), exact: true }).last();
-    if (await dayCell.isVisible().catch(() => false)) {
-      await dayCell.click();
+    // 2. Click "Edit Practice Repeat"
+    console.log('[Update] Opening Edit Practice Repeat...');
+    const editRepeatBtn = modalFrame.getByTitle(/Edit Practice Repeat/i);
+    await editRepeatBtn.waitFor({ state: 'attached', timeout: 5000 });
+
+    // Check if the button is enabled; if Angular still has it disabled, force-enable or re-click radio
+    let isEnabled = false;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const isDisabled = await editRepeatBtn.getAttribute('disabled').catch(() => null);
+      if (!isDisabled) {
+        isEnabled = true;
+        break;
+      }
+      console.log(`[Update] Button still disabled, re-clicking radio #2 (attempt ${attempt + 1})...`);
+      if (radioCount >= 2) {
+        await radios.nth(1).check({ force: true }).catch(() => {});
+        await radios.nth(1).click({ force: true }).catch(() => {});
+      }
+      await allSeriesLabel.click({ force: true }).catch(() => {});
+      await modalFrame.waitForTimeout(400);
+    }
+
+    if (!isEnabled) {
+      console.log('[Update] Force-triggering Edit Practice Repeat click...');
+      await editRepeatBtn.evaluate(btn => {
+        btn.removeAttribute('disabled');
+        btn.click();
+      }).catch(async () => {
+        await editRepeatBtn.click({ force: true });
+      });
     } else {
-      // Fallback: match day text in datepicker table
-      const textCell = modalFrame.locator('.practice-datepicker td, .practice-datepicker .ng-binding').filter({ hasText: new RegExp(`^${targetEndDay}$`) }).last();
-      await textCell.click();
+      await editRepeatBtn.click();
     }
-  } else {
-    // If there is an input field for end date
-    const dateInput = modalFrame.locator('#practiceRepeatEnd input, input[name*="repeatEnd"]');
-    if (await dateInput.isVisible().catch(() => false)) {
-      await dateInput.fill(formattedEndDate);
-    }
-  }
+    await modalFrame.waitForTimeout(800);
 
-  // 4. Click "Done" on repeat settings
-  const doneBtn = modalFrame.getByRole('button', { name: 'Done' });
-  await doneBtn.click();
-  await modalFrame.waitForTimeout(500);
+    // 3. Update Repeat End Date
+    console.log(`[Update] Setting repeat end date to day ${targetEndDay} (${formattedEndDate})...`);
+    const calendarIcon = modalFrame.locator('#practiceRepeatEnd > div > .calendar, #practiceRepeatEnd .calendar-icon, #practiceRepeatEnd i').first();
 
-  // 5. Save changes
-  if (isDryRun) {
-    console.log('[DRY RUN] Skipping #btnSavePractice click.');
-    // Close modal without saving
-    const cancelBtn = modalFrame.getByRole('button', { name: /Cancel|Close/i }).or(modalFrame.locator('.close, .fa-times').first());
-    if (await cancelBtn.isVisible().catch(() => false)) {
-      await cancelBtn.click();
+    if (await calendarIcon.isVisible().catch(() => false)) {
+      await calendarIcon.click();
+      await modalFrame.waitForTimeout(500);
+
+      // Click on target day in the open datepicker
+      const dayCell = modalFrame.getByRole('cell', { name: String(targetEndDay), exact: true }).last();
+      if (await dayCell.isVisible().catch(() => false)) {
+        await dayCell.click();
+      } else {
+        // Fallback: match day text in datepicker table
+        const textCell = modalFrame.locator('.practice-datepicker td, .practice-datepicker .ng-binding')
+          .filter({ hasText: new RegExp(`^${targetEndDay}$`) })
+          .last();
+        await textCell.click();
+      }
+    } else {
+      // If there is an input field for end date
+      const dateInput = modalFrame.locator('#practiceRepeatEnd input, input[name*="repeatEnd"]');
+      if (await dateInput.isVisible().catch(() => false)) {
+        await dateInput.fill(formattedEndDate);
+      }
     }
-  } else {
-    console.log('[Update] Saving practice...');
-    const saveBtn = modalFrame.locator('#btnSavePractice');
-    await saveBtn.click();
-    await practicesFrame.waitForTimeout(1500);
+
+    // 4. Click "Done" on repeat settings
+    const doneBtn = modalFrame.getByRole('button', { name: 'Done' });
+    if (await doneBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await doneBtn.click();
+      await modalFrame.waitForTimeout(500);
+    }
+
+    // 5. Save changes
+    if (isDryRun) {
+      console.log('[DRY RUN] Skipping #btnSavePractice click; closing modal...');
+      const cancelBtn = modalFrame.getByRole('button', { name: /Cancel|Close/i }).or(modalFrame.locator('.close, .fa-times').first());
+      if (await cancelBtn.isVisible().catch(() => false)) {
+        await cancelBtn.click();
+      } else {
+        await practicesFrame.page().keyboard.press('Escape');
+      }
+    } else {
+      console.log('[Update] Saving practice...');
+      const saveBtn = modalFrame.locator('#btnSavePractice');
+      await saveBtn.click();
+      await practicesFrame.waitForTimeout(1500);
+    }
+  } catch (err) {
+    console.warn(`[Warning] Error in extendSeriesEndDate:`, err.message);
+    throw err;
+  } finally {
+    // ALWAYS clean up modal before returning to calendar
+    await closeModalIfOpen(practicesFrame);
+    await practicesFrame.waitForTimeout(500);
   }
 }
 
