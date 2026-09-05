@@ -119,5 +119,4 @@ test('generates formatted WhatsApp message with minimal formatting', () => {
   assert.ok(wa.includes('- Drylands (Senior & Age Group 1)'));
   assert.ok(wa.includes('- Senior: 7:00am - 9:30am'));
   assert.ok(wa.includes('- Age Group: 8:00am - 9:30am'));
-  assert.ok(wa.includes('https://www.icacswim.com'));
 });

@@ -359,6 +359,5 @@ export function formatWhatsAppMessage(plan) {
     msg += `\n`;
   }
 
-  msg += `Live Schedule: https://www.icacswim.com\n`;
   return msg.trim();
 }
